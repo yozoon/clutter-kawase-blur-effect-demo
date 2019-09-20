@@ -4,7 +4,6 @@
 #include <gdk/gdk.h>
 #include <clutter-gtk/clutter-gtk.h>
 #include "clutter-kawase-blur-effect.h"
-//#include "viewer.h"
 
 static void
 print_hello (GtkWidget *widget,
@@ -24,13 +23,7 @@ activate (GtkApplication *app,
     ClutterActor *stage;
     ClutterEffect *effect;
 
-    //ViewerFile *vf;
-    //vf = viewer_file_new();
-
-    //ViewerFile *file = g_object_new (VIEWER_TYPE_FILE, NULL);
-
     effect = clutter_kawase_blur_effect_new();
-    //effect = clutter_blur_effect_new();
 
     window = gtk_application_window_new (app);
     gtk_window_set_title (GTK_WINDOW (window), "Window");
