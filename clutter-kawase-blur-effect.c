@@ -54,6 +54,7 @@
  */
 static const gchar *box_blur_glsl_declarations =
 "uniform vec2 pixel_step;\n";
+
 #define SAMPLE(offx, offy) \
   "cogl_texel += texture2D (cogl_sampler, cogl_tex_coord.st + pixel_step * " \
   "vec2 (" G_STRINGIFY (offx) ", " G_STRINGIFY (offy) "));\n"
@@ -71,6 +72,33 @@ static const gchar *box_blur_glsl_shader =
 "  cogl_texel /= 9.0;\n";
 #undef SAMPLE
 
+static const gchar *kawase_blur_glsl_declarations =
+"uniform vec2 halfpixel;\n"
+"uniform vec2 offset;\n";
+
+static const gchar *kawase_down_glsl_shader =
+"vec2 uv = cogl_tex_coord.st;\n"
+"cogl_texel = texture2D(cogl_sampler, uv) * 4.0;\n"
+"cogl_texel += texture2D(cogl_sampler, uv - halfpixel.xy * offset);\n"
+"cogl_texel += texture2D(cogl_sampler, uv + halfpixel.xy * offset);\n"
+"cogl_texel += texture2D(cogl_sampler, uv + vec2(halfpixel.x, -halfpixel.y) * offset);\n"
+"cogl_texel += texture2D(cogl_sampler, uv - vec2(halfpixel.x, -halfpixel.y) * offset);\n"
+"cogl_texel /= 8.0;\n"
+"cogl_texel.a = 1.0;\n";
+
+static const gchar *kawase_up_glsl_shader =
+"vec2 uv = cogl_tex_coord.st;\n"
+"cogl_texel = texture2D(cogl_sampler, uv + vec2(-halfpixel.x * 2.0, 0.0) * offset);\n"
+"cogl_texel += texture2D(cogl_sampler, uv + vec2(-halfpixel.x, halfpixel.y) * offset) * 2.0;\n"
+"cogl_texel += texture2D(cogl_sampler, uv + vec2(0.0, halfpixel.y * 2.0) * offset);\n"
+"cogl_texel += texture2D(cogl_sampler, uv + vec2(halfpixel.x, halfpixel.y) * offset) * 2.0;\n"
+"cogl_texel += texture2D(cogl_sampler, uv + vec2(halfpixel.x * 2.0, 0.0) * offset);\n"
+"cogl_texel += texture2D(cogl_sampler, uv + vec2(halfpixel.x, -halfpixel.y) * offset) * 2.0;\n"
+"cogl_texel += texture2D(cogl_sampler, uv + vec2(0.0, -halfpixel.y * 2.0) * offset);\n"
+"cogl_texel += texture2D(cogl_sampler, uv + vec2(-halfpixel.x, -halfpixel.y) * offset) * 2.0;\n"
+"cogl_texel /= 12.0;\n"
+"cogl_texel.a = 1.0;\n";
+
 struct _ClutterKawaseBlurEffect
 {
   ClutterOffscreenEffect parent_instance;
@@ -78,7 +106,11 @@ struct _ClutterKawaseBlurEffect
   /* a back pointer to our actor, so that we can query it */
   ClutterActor *actor;
 
-  gint pixel_step_uniform;
+  gfloat offset;
+  gint iterations;
+
+  gint offset_uniform;
+  gint halfpixel_uniform;
 
   gint tex_width;
   gint tex_height;
@@ -134,18 +166,29 @@ clutter_kawase_blur_effect_pre_paint (ClutterEffect *effect)
       self->tex_width = cogl_texture_get_width (texture);
       self->tex_height = cogl_texture_get_height (texture);
 
-      if (self->pixel_step_uniform > -1)
+      if (self->offset_uniform > -1 && self->halfpixel_uniform > -1)
         {
-          gfloat pixel_step[2];
+          printf("updating uniforms\n");
+          gfloat halfpixel[2];
 
-          pixel_step[0] = 1.0f / self->tex_width;
-          pixel_step[1] = 1.0f / self->tex_height;
+          halfpixel[0] = 0.5f / self->tex_width;
+          halfpixel[1] = 0.5f / self->tex_height;
+
+          gfloat offset[2];
+          offset[0] = self->offset;
+          offset[1] = self->offset;
 
           cogl_pipeline_set_uniform_float (self->pipeline,
-                                           self->pixel_step_uniform,
+                                           self->offset_uniform,
                                            2, /* n_components */
                                            1, /* count */
-                                           pixel_step);
+                                           offset);
+
+          cogl_pipeline_set_uniform_float (self->pipeline,
+                                           self->halfpixel_uniform,
+                                           2, /* n_components */
+                                           1, /* count */
+                                           halfpixel);
         }
 
       cogl_pipeline_set_layer_texture (self->pipeline, 0, texture);
@@ -159,7 +202,7 @@ clutter_kawase_blur_effect_pre_paint (ClutterEffect *effect)
 static void
 clutter_kawase_blur_effect_paint_target (ClutterOffscreenEffect *effect)
 {
-  printf("paint target\n");
+  //printf("paint target\n");
   ClutterKawaseBlurEffect *self = CLUTTER_KAWASE_BLUR_EFFECT (effect);
   CoglFramebuffer *framebuffer = cogl_get_draw_framebuffer ();
   guint8 paint_opacity;
@@ -182,7 +225,7 @@ static gboolean
 clutter_kawase_blur_effect_get_paint_volume (ClutterEffect      *effect,
                                       ClutterPaintVolume *volume)
 {
-  printf("get paint volume\n");
+  //printf("get paint volume\n");
   gfloat cur_width, cur_height;
   ClutterVertex origin;
 
@@ -204,7 +247,7 @@ clutter_kawase_blur_effect_get_paint_volume (ClutterEffect      *effect,
 static void
 clutter_kawase_blur_effect_dispose (GObject *gobject)
 {
-  printf("dispose\n");
+  //printf("dispose\n");
   ClutterKawaseBlurEffect *self = CLUTTER_KAWASE_BLUR_EFFECT (gobject);
 
   if (self->pipeline != NULL)
@@ -219,7 +262,7 @@ clutter_kawase_blur_effect_dispose (GObject *gobject)
 static void
 clutter_kawase_blur_effect_class_init (ClutterKawaseBlurEffectClass *klass)
 {
-  printf("class init\n");
+  //printf("class init\n");
   ClutterEffectClass *effect_class = CLUTTER_EFFECT_CLASS (klass);
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
   ClutterOffscreenEffectClass *offscreen_class;
@@ -233,35 +276,60 @@ clutter_kawase_blur_effect_class_init (ClutterKawaseBlurEffectClass *klass)
   offscreen_class->paint_target = clutter_kawase_blur_effect_paint_target;
 }
 
+CoglSnippet *
+generate_snippet(const gchar* declarations, const gchar* glsl_shader) {
+  CoglSnippet * snippet;
+  snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_TEXTURE_LOOKUP,
+                              declarations,
+                              NULL);
+  cogl_snippet_set_replace (snippet, glsl_shader);
+  return snippet;
+}
+
 static void
 clutter_kawase_blur_effect_init (ClutterKawaseBlurEffect *self)
 {
-  printf("init\n");
+  //printf("init\n");
+  self->offset = 10.0f;
+  self->iterations = 1;
   ClutterKawaseBlurEffectClass *klass = CLUTTER_KAWASE_BLUR_EFFECT_GET_CLASS (self);
   if (G_UNLIKELY (klass->base_pipeline == NULL))
     {
-      CoglSnippet *snippet;
       CoglContext *ctx =
         clutter_backend_get_cogl_context (clutter_get_default_backend ());
 
       klass->base_pipeline = cogl_pipeline_new (ctx);
 
-      snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_TEXTURE_LOOKUP,
-                                  box_blur_glsl_declarations,
-                                  NULL);
-      cogl_snippet_set_replace (snippet, box_blur_glsl_shader);
-      cogl_pipeline_add_layer_snippet (klass->base_pipeline, 0, snippet);
-      cogl_object_unref (snippet);
+      // The shaders arent actually getting chained - they seem to be all referencing the same original texture.
+      // for a true multi pass kawase shader we would have to chain multiple layers.
+      cogl_pipeline_add_layer_snippet (klass->base_pipeline, 0, 
+        generate_snippet(kawase_blur_glsl_declarations, kawase_down_glsl_shader));
+      
+      cogl_pipeline_add_layer_snippet (klass->base_pipeline, 0, 
+        generate_snippet(kawase_blur_glsl_declarations, kawase_up_glsl_shader));
+      
+      //cogl_object_unref (down_snippet);
+      //cogl_object_unref (up_snippet);
 
       cogl_pipeline_set_layer_null_texture (klass->base_pipeline,
                                             0, /* layer number */
                                             COGL_TEXTURE_TYPE_2D);
+      //cogl_pipeline_set_layer_null_texture (klass->base_pipeline,
+      //                                      1, /* layer number */
+      //                                      COGL_TEXTURE_TYPE_2D);
+      //both settings seem to have no effect on the texture
+      //cogl_pipeline_set_layer_wrap_mode (klass->base_pipeline, 0, COGL_PIPELINE_WRAP_MODE_CLAMP_TO_EDGE);
+      //cogl_pipeline_set_layer_filters (klass->base_pipeline, 0, COGL_PIPELINE_FILTER_LINEAR, COGL_PIPELINE_FILTER_LINEAR);
+
     }
 
   self->pipeline = cogl_pipeline_copy (klass->base_pipeline);
 
-  self->pixel_step_uniform =
-    cogl_pipeline_get_uniform_location (self->pipeline, "pixel_step");
+  self->offset_uniform =
+    cogl_pipeline_get_uniform_location (self->pipeline, "offset");
+  self->halfpixel_uniform =
+    cogl_pipeline_get_uniform_location (self->pipeline, "halfpixel");
+
 }
 
 /**
@@ -277,6 +345,6 @@ clutter_kawase_blur_effect_init (ClutterKawaseBlurEffect *self)
 ClutterEffect *
 clutter_kawase_blur_effect_new (void)
 {
-  printf("blur effect new\n");
+  //printf("blur effect new\n");
   return g_object_new (CLUTTER_TYPE_KAWASE_BLUR_EFFECT, NULL);
 }
