@@ -172,7 +172,6 @@ clutter_kawase_blur_effect_pre_paint (ClutterEffect *effect)
                                               halfpixel);
             }        
         }
-      printf("done\n");
       // The first pipeline receives the original texture derived from the clutter actor
       cogl_pipeline_set_layer_texture (self->pipeline_stack[0], 0, texture);
       // All subsequent pipelines receive the offscreen texture as their input,
@@ -182,19 +181,21 @@ clutter_kawase_blur_effect_pre_paint (ClutterEffect *effect)
       // texture anyway)
       CoglContext *ctx =
         clutter_backend_get_cogl_context (clutter_get_default_backend ());
-      
-      for(int i=1; i<2*DOWNSAMPLE_ITERATIONS; i++)
-      {
-        if (self->offscreen_textures[i-1] != NULL)
-        {
-          cogl_object_unref(self->offscreen_textures[i-1]);
-        }
-        self->offscreen_textures[i-1] = 
-          cogl_texture_2d_new_with_size (ctx, self->tex_width, self->tex_width);
-        cogl_pipeline_set_layer_texture (self->pipeline_stack[i], 0, self->offscreen_textures[i-1]);
-      }
-      
 
+      for(int i=0; i<2*DOWNSAMPLE_ITERATIONS-1; i++)
+        {
+          if (self->offscreen_textures[i] != NULL)
+            {
+              cogl_object_unref(self->offscreen_textures[i]);
+            }
+          self->offscreen_textures[i] = 
+            cogl_texture_2d_new_with_size (ctx, self->tex_width, self->tex_width);
+        }
+
+      for(int i=1; i<2*DOWNSAMPLE_ITERATIONS; i++)
+        {
+          cogl_pipeline_set_layer_texture (self->pipeline_stack[i], 0, self->offscreen_textures[i-1]);
+        }
       return TRUE;
     }
   else
@@ -213,7 +214,8 @@ clutter_kawase_blur_effect_paint_target (ClutterOffscreenEffect *effect)
   // as the input of  
   for(int i=0; i<2*DOWNSAMPLE_ITERATIONS-1; i++)
     {
-      self->offscreenbuffers[i] = cogl_offscreen_new_to_texture (self->offscreen_textures[i]);
+      self->offscreenbuffers[i] = 
+        cogl_offscreen_new_to_texture (self->offscreen_textures[i]);
     }
 
   guint8 paint_opacity;
@@ -228,13 +230,6 @@ clutter_kawase_blur_effect_paint_target (ClutterOffscreenEffect *effect)
                                   paint_opacity,
                                   paint_opacity);
     }
-
-  // cogl_framebuffer_draw_rectangle (offscreenbuffers[0],
-  //                                 self->pipeline_stack[0],
-  //                                 -1.0, -1.0,
-  //                                 1.0, 1.0);
-
-  // cogl_framebuffer_finish(offscreenbuffers[0]);
 
   // Downsampling
   for(int i=0; i<DOWNSAMPLE_ITERATIONS; i++)
@@ -258,7 +253,8 @@ clutter_kawase_blur_effect_paint_target (ClutterOffscreenEffect *effect)
       cogl_framebuffer_finish(self->offscreenbuffers[i]);
     }
   
-  // Draw the final image on the onscreen framebuffer
+  // Draw the final image on the onscreen framebuffer (don't ask me 
+  // why we need to swap the xy coordinates like this to get an upright image...)
   cogl_framebuffer_draw_rectangle (framebuffer,
                                   self->pipeline_stack[2*DOWNSAMPLE_ITERATIONS-1],
                                   0, self->tex_height,
@@ -277,7 +273,7 @@ clutter_kawase_blur_effect_get_paint_volume (ClutterEffect      *effect,
                                       ClutterPaintVolume *volume)
 {
   printf("get paint volume\n");
-  /*
+  
   gfloat cur_width, cur_height;
   ClutterVertex origin;
 
@@ -292,7 +288,7 @@ clutter_kawase_blur_effect_get_paint_volume (ClutterEffect      *effect,
   clutter_paint_volume_set_origin (volume, &origin);
   clutter_paint_volume_set_width (volume, cur_width);
   clutter_paint_volume_set_height (volume, cur_height);
-  */
+ 
   return TRUE;
 }
 
@@ -383,15 +379,8 @@ clutter_kawase_blur_effect_init (ClutterKawaseBlurEffect *self)
 
   for(int i=0; i<DOWNSAMPLE_ITERATIONS; i++)
     {
-      printf("downsample pipeline copy: %d\n", i);
       self->pipeline_stack[i] = cogl_pipeline_copy (klass->downsample_base_pipeline);
-    }
-
-  
-  for(int i=DOWNSAMPLE_ITERATIONS; i<2*DOWNSAMPLE_ITERATIONS; i++)
-    {
-      printf("upsample pipeline copy: %d\n", i);
-      self->pipeline_stack[i] = cogl_pipeline_copy (klass->upsample_base_pipeline);
+      self->pipeline_stack[i+DOWNSAMPLE_ITERATIONS] = cogl_pipeline_copy (klass->upsample_base_pipeline);
     }
     
 
