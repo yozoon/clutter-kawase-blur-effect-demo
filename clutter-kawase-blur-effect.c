@@ -47,30 +47,7 @@
 
 #include "clutter-kawase-blur-effect.h"
 
-#define BLUR_PADDING    2
-
-/* FIXME - lame shader; we should really have a decoupled
- * horizontal/vertical two pass shader for the gaussian blur
- */
-static const gchar *box_blur_glsl_declarations =
-"uniform vec2 pixel_step;\n";
-
-#define SAMPLE(offx, offy) \
-  "cogl_texel += texture2D (cogl_sampler, cogl_tex_coord.st + pixel_step * " \
-  "vec2 (" G_STRINGIFY (offx) ", " G_STRINGIFY (offy) "));\n"
-
-static const gchar *box_blur_glsl_shader =
-"  cogl_texel = texture2D (cogl_sampler, cogl_tex_coord.st);\n"
-  SAMPLE (-1.0, -1.0)
-  SAMPLE ( 0.0, -1.0)
-  SAMPLE (+1.0, -1.0)
-  SAMPLE (-1.0,  0.0)
-  SAMPLE (+1.0,  0.0)
-  SAMPLE (-1.0, +1.0)
-  SAMPLE ( 0.0, +1.0)
-  SAMPLE (+1.0, +1.0)
-"  cogl_texel /= 9.0;\n";
-#undef SAMPLE
+#define BLUR_PADDING 2
 
 static const gchar *kawase_blur_glsl_declarations =
 "uniform vec2 halfpixel;\n"
@@ -193,7 +170,7 @@ clutter_kawase_blur_effect_pre_paint (ClutterEffect *effect)
 
       cogl_pipeline_set_layer_texture (self->pipeline, 0, texture);
 
-       return TRUE;
+      return TRUE;
     }
   else
     return FALSE;
@@ -219,13 +196,16 @@ clutter_kawase_blur_effect_paint_target (ClutterOffscreenEffect *effect)
                                    self->pipeline,
                                    0, 0,
                                    self->tex_width, self->tex_height);
+                                   
 }
 
+/*
 static gboolean
 clutter_kawase_blur_effect_get_paint_volume (ClutterEffect      *effect,
                                       ClutterPaintVolume *volume)
 {
-  //printf("get paint volume\n");
+  printf("get paint volume\n");
+  
   gfloat cur_width, cur_height;
   ClutterVertex origin;
 
@@ -240,9 +220,9 @@ clutter_kawase_blur_effect_get_paint_volume (ClutterEffect      *effect,
   clutter_paint_volume_set_origin (volume, &origin);
   clutter_paint_volume_set_width (volume, cur_width);
   clutter_paint_volume_set_height (volume, cur_height);
-
   return TRUE;
 }
+*/
 
 static void
 clutter_kawase_blur_effect_dispose (GObject *gobject)
@@ -270,7 +250,7 @@ clutter_kawase_blur_effect_class_init (ClutterKawaseBlurEffectClass *klass)
   gobject_class->dispose = clutter_kawase_blur_effect_dispose;
 
   effect_class->pre_paint = clutter_kawase_blur_effect_pre_paint;
-  effect_class->get_paint_volume = clutter_kawase_blur_effect_get_paint_volume;
+  //effect_class->get_paint_volume = clutter_kawase_blur_effect_get_paint_volume;
 
   offscreen_class = CLUTTER_OFFSCREEN_EFFECT_CLASS (klass);
   offscreen_class->paint_target = clutter_kawase_blur_effect_paint_target;
@@ -305,8 +285,8 @@ clutter_kawase_blur_effect_init (ClutterKawaseBlurEffect *self)
       cogl_pipeline_add_layer_snippet (klass->base_pipeline, 0, 
         generate_snippet(kawase_blur_glsl_declarations, kawase_down_glsl_shader));
       
-      cogl_pipeline_add_layer_snippet (klass->base_pipeline, 0, 
-        generate_snippet(kawase_blur_glsl_declarations, kawase_up_glsl_shader));
+      //cogl_pipeline_add_layer_snippet (klass->base_pipeline, 1, 
+      //  generate_snippet(NULL, kawase_up_glsl_shader));
       
       //cogl_object_unref (down_snippet);
       //cogl_object_unref (up_snippet);
@@ -318,8 +298,8 @@ clutter_kawase_blur_effect_init (ClutterKawaseBlurEffect *self)
       //                                      1, /* layer number */
       //                                      COGL_TEXTURE_TYPE_2D);
       //both settings seem to have no effect on the texture
-      //cogl_pipeline_set_layer_wrap_mode (klass->base_pipeline, 0, COGL_PIPELINE_WRAP_MODE_CLAMP_TO_EDGE);
-      //cogl_pipeline_set_layer_filters (klass->base_pipeline, 0, COGL_PIPELINE_FILTER_LINEAR, COGL_PIPELINE_FILTER_LINEAR);
+      //cogl_pipeline_set_layer_wrap_mode (klass->base_pipeline, 1, COGL_PIPELINE_WRAP_MODE_CLAMP_TO_EDGE);
+      //cogl_pipeline_set_layer_filters (klass->base_pipeline, 1, COGL_PIPELINE_FILTER_LINEAR, COGL_PIPELINE_FILTER_LINEAR);
 
     }
 

@@ -34,7 +34,7 @@ activate (GtkApplication *app,
 
     ClutterContent *image = clutter_image_new ();
 
-    GdkPixbuf *pixbuf = gdk_pixbuf_new_from_file ("kingscanyon.png", NULL);
+    GdkPixbuf *pixbuf = gdk_pixbuf_new_from_file ("baboon.tiff", NULL);
 
     clutter_image_set_data (CLUTTER_IMAGE (image),
                             gdk_pixbuf_get_pixels (pixbuf),
