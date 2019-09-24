@@ -41,6 +41,7 @@
  * These defines are very important to enable the cogl pipeline and 
  * clutter backend functionality required for this effect to work.
  * They have to be called before the clutter library is included.
+ * Otherwise we get a lot of segfaults.
  */
 #define COGL_ENABLE_EXPERIMENTAL_API
 #define CLUTTER_ENABLE_EXPERIMENTAL_API
@@ -48,25 +49,25 @@
 #include "clutter-kawase-blur-effect.h"
 
 #define BLUR_PADDING 5
-#define DOWNSAMPLE_ITERATIONS 5
+#define BLUR_STRENGTH 6
+#define DOWNSAMPLE_ITERATIONS 6
 
 static const gchar *kawase_blur_glsl_declarations =
 "uniform vec2 halfpixel;\n"
 "uniform vec2 offset;\n";
 
 static const gchar *kawase_down_glsl_shader =
-"vec2 uv = cogl_tex_coord.st;\n"
+"vec2 uv = cogl_tex_coord.xy;\n"
 "cogl_texel = texture2D(cogl_sampler, uv) * 4.0;\n"
 "cogl_texel += texture2D(cogl_sampler, uv - halfpixel.xy * offset);\n"
 "cogl_texel += texture2D(cogl_sampler, uv + halfpixel.xy * offset);\n"
 "cogl_texel += texture2D(cogl_sampler, uv + vec2(halfpixel.x, -halfpixel.y) * offset);\n"
 "cogl_texel += texture2D(cogl_sampler, uv - vec2(halfpixel.x, -halfpixel.y) * offset);\n"
 "cogl_texel /= 8.0;\n"
-//"cogl_texel = vec4(1.0, 0.0, 0.0, 1.0);\n"
 "cogl_texel.a = 1.0;\n";
 
 static const gchar *kawase_up_glsl_shader =
-"vec2 uv = cogl_tex_coord.st;\n"
+"vec2 uv = cogl_tex_coord.xy;\n"
 "cogl_texel = texture2D(cogl_sampler, uv + vec2(-halfpixel.x * 2.0, 0.0) * offset);\n"
 "cogl_texel += texture2D(cogl_sampler, uv + vec2(-halfpixel.x, halfpixel.y) * offset) * 2.0;\n"
 "cogl_texel += texture2D(cogl_sampler, uv + vec2(0.0, halfpixel.y * 2.0) * offset);\n"
@@ -89,6 +90,7 @@ struct _ClutterKawaseBlurEffect
 
   gint offset_uniforms[2*DOWNSAMPLE_ITERATIONS];
   gint halfpixel_uniforms[2*DOWNSAMPLE_ITERATIONS];
+
   CoglHandle offscreen_textures[2*DOWNSAMPLE_ITERATIONS-1];
   CoglFramebuffer *offscreenbuffers[2*DOWNSAMPLE_ITERATIONS-1];
 
@@ -182,15 +184,33 @@ clutter_kawase_blur_effect_pre_paint (ClutterEffect *effect)
       CoglContext *ctx =
         clutter_backend_get_cogl_context (clutter_get_default_backend ());
 
-      for(int i=0; i<2*DOWNSAMPLE_ITERATIONS-1; i++)
+      for(int i=0; i<DOWNSAMPLE_ITERATIONS-1; i++)
         {
+          gint subdiv = (1<<i+1);
+          printf("front: %d back: %d scale: %d\n", i, 2*DOWNSAMPLE_ITERATIONS-2-i, (1<<i+1));
           if (self->offscreen_textures[i] != NULL)
             {
               cogl_object_unref(self->offscreen_textures[i]);
             }
           self->offscreen_textures[i] = 
-            cogl_texture_2d_new_with_size (ctx, self->tex_width, self->tex_width);
+            cogl_texture_2d_new_with_size (ctx, self->tex_width/subdiv, self->tex_width/subdiv);
+
+
+          if (self->offscreen_textures[2*DOWNSAMPLE_ITERATIONS-2-i] != NULL)
+            {
+              cogl_object_unref(self->offscreen_textures[2*DOWNSAMPLE_ITERATIONS-2-i]);
+            }
+          self->offscreen_textures[2*DOWNSAMPLE_ITERATIONS-2-i] = 
+            cogl_texture_2d_new_with_size (ctx, self->tex_width/subdiv, self->tex_width/subdiv);
         }
+
+      if (self->offscreen_textures[DOWNSAMPLE_ITERATIONS-1] != NULL)
+        {
+          cogl_object_unref(self->offscreen_textures[DOWNSAMPLE_ITERATIONS-1]);
+        }
+      self->offscreen_textures[DOWNSAMPLE_ITERATIONS-1] = 
+        cogl_texture_2d_new_with_size (ctx, self->tex_width/(1<<DOWNSAMPLE_ITERATIONS), self->tex_width/(1<<DOWNSAMPLE_ITERATIONS));
+
 
       for(int i=1; i<2*DOWNSAMPLE_ITERATIONS; i++)
         {
@@ -342,7 +362,7 @@ static void
 clutter_kawase_blur_effect_init (ClutterKawaseBlurEffect *self)
 {
   //printf("init\n");
-  self->offset = 5.0f;
+  self->offset = BLUR_STRENGTH;
   ClutterKawaseBlurEffectClass *klass = CLUTTER_KAWASE_BLUR_EFFECT_GET_CLASS (self);
   if (G_UNLIKELY (klass->downsample_base_pipeline == NULL))
     {
