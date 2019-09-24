@@ -31,9 +31,8 @@
 
 #include <glib-object.h>
 #include <clutter/clutter.h>
-//#include <clutter/clutter-effect.h>
-//#include <clutter/clutter-offscreen-effect.h>
 #include <cogl/cogl.h>
+#include <math.h>
 
 G_BEGIN_DECLS
 
