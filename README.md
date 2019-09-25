@@ -32,7 +32,7 @@ This generates an executable called "blur_demo" inside the _builddir_.
 | Tweak the offset and iteration values to make the transitions smoother | Optional |
 | ... | ... |
 
-## Contribute
+## Contributing
 I'm sure there are still lots of memory optimisations and type checks that can be implemented to further improve the code quality. Also I tried to adhere to the coding style I found in the Clutter project, but I might have overlooked some inconsistencies - so feel free to create a new PR ;)
 
 ## Credits
