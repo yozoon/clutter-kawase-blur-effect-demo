@@ -2,7 +2,7 @@
 GTK app demonstrating a new Clutter effect based on the dual Kawase blur method. 
 This project aims to implement the fast blur effect found in the KDE KWin window manager with tools native to the GNOME Desktop environment.
 
-![Window Screenshot](https://raw.githubusercontent.com/yozoon/clutter-kawase-blur-effect-demo/master/screenshot.png "Window Screenshot")
+![](https://raw.githubusercontent.com/yozoon/clutter-kawase-blur-effect-demo/master/screenshot.png "Window Screenshot")
 
 ## Compilation
 ```bash
