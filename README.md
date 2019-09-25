@@ -12,7 +12,7 @@ meson <builddir>
 cd <builddir>
 ninja
 ```
-This generates an executable called "blur_demo" inside the <builddir>.
+This generates an executable called "blur_demo" inside the _builddir_.
 
 ## Roadmap
 | Task | Status |
