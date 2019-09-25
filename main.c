@@ -1,3 +1,30 @@
+/*
+ * Dual Kawase Blur Demo.
+ *
+ * Application demonstrating the use of the Clutter Kawase blur effect.
+ *
+ * Copyright (C) 2019  Julius Piso
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * Author:
+ *   Julius Piso <julius@piso.at>
+ * 
+ * Based on:
+ *   https://developer.gnome.org/gtk3/stable/gtk-getting-started.html
+ */
+
 #include <stdlib.h>
 #include <clutter/clutter.h>
 #include <gtk/gtk.h>
@@ -8,7 +35,7 @@
 /* https://developer.gnome.org/gnome-devel-demos/stable/scale.c.html.en */
 static void
 scale_moved (GtkRange *range,
-              gpointer  user_data)
+            gpointer  user_data)
 {
    gint pos = (gint) gtk_range_get_value (range);
    clutter_kawase_blur_effect_update_blur_strength(CLUTTER_KAWASE_BLUR_EFFECT(user_data), pos);

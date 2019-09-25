@@ -4,6 +4,7 @@
  * An OpenGL based 'interactive canvas' library.
  *
  * Copyright (C) 2010  Intel Corporation.
+ * Copyright (C) 2019  Julius Piso
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -18,8 +19,9 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library. If not, see <http://www.gnu.org/licenses/>.
  *
- * Author:
+ * Authors:
  *   Emmanuele Bassi <ebassi@linux.intel.com>
+ *   Julius Piso <julius@piso.at>
  */
 
 /**
@@ -117,11 +119,6 @@ struct _ClutterKawaseBlurEffectClass
 G_DEFINE_TYPE (ClutterKawaseBlurEffect,
                clutter_kawase_blur_effect,
                CLUTTER_TYPE_OFFSCREEN_EFFECT);
-
-// G_DEFINE_TYPE_WITH_CODE (ClutterKawaseBlurEffect,
-//                         clutter_kawase_blur_effect,
-//                         CLUTTER_TYPE_OFFSCREEN_EFFECT,
-//                         CLUTTER_REGISTER_INTERVAL_PROGRESS (clutter_actor_box_progress));
 
 static gboolean
 clutter_kawase_blur_effect_pre_paint (ClutterEffect *effect)
