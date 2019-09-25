@@ -5,11 +5,13 @@
 #include <clutter-gtk/clutter-gtk.h>
 #include "clutter-kawase-blur-effect.h"
 
+/* https://developer.gnome.org/gnome-devel-demos/stable/scale.c.html.en */
 static void
-print_hello (GtkWidget *widget,
-             gpointer   data)
+scale_moved (GtkRange *range,
+              gpointer  user_data)
 {
-    g_print ("Hello World\n");
+   gint pos = (gint) gtk_range_get_value (range);
+   clutter_kawase_blur_effect_update_blur_strength(CLUTTER_KAWASE_BLUR_EFFECT(user_data), pos);
 }
 
 static void
@@ -17,20 +19,20 @@ activate (GtkApplication *app,
           gpointer        user_data)
 {
     GtkWidget *window;
-    GtkWidget *button;
-    GtkWidget *button_box;
+    GtkWidget *box;
+    GtkWidget *scale;
     GtkWidget *embed;
     ClutterActor *stage;
     ClutterEffect *effect;
 
-    effect = clutter_kawase_blur_effect_new();
+    gint initial_strength = 7;
+
+    box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 8);
+    scale = gtk_scale_new_with_range (GTK_ORIENTATION_HORIZONTAL, 0, 14, 1);
+    gtk_range_set_value(GTK_RANGE(scale), initial_strength);
 
     window = gtk_application_window_new (app);
-    gtk_window_set_title (GTK_WINDOW (window), "Window");
-
-    embed = gtk_clutter_embed_new ();
-
-    stage = gtk_clutter_embed_get_stage (GTK_CLUTTER_EMBED (embed));
+    gtk_window_set_title (GTK_WINDOW (window), "Dual Kawase Blur Demo");
 
     ClutterContent *image = clutter_image_new ();
 
@@ -50,11 +52,22 @@ activate (GtkApplication *app,
 
     g_object_unref (pixbuf);
 
+    embed = gtk_clutter_embed_new ();
+    stage = gtk_clutter_embed_get_stage (GTK_CLUTTER_EMBED (embed));
+    clutter_actor_set_content(stage, image);
+    effect = clutter_kawase_blur_effect_new();
+    clutter_kawase_blur_effect_update_blur_strength(CLUTTER_KAWASE_BLUR_EFFECT(effect), initial_strength);
     clutter_actor_add_effect_with_name(stage, "blur", effect);
 
-    clutter_actor_set_content(stage, image);
+    g_signal_connect (scale, 
+                      "value-changed", 
+                      G_CALLBACK (scale_moved), 
+                      effect);
 
-    gtk_container_add (GTK_CONTAINER (window), embed);
+    /* box, child, expand, fill, padding */
+    gtk_box_pack_start (GTK_BOX(box), scale, FALSE, TRUE, 0);
+    gtk_box_pack_start (GTK_BOX(box), embed, TRUE, TRUE, 0);
+    gtk_container_add (GTK_CONTAINER (window), box);
 
     gtk_widget_show_all (window);
 }

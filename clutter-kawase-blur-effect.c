@@ -49,16 +49,14 @@
 #include "clutter-kawase-blur-effect.h"
 
 #define BLUR_STEPS 15
-#define BLUR_PADDING 10
-#define BLUR_STRENGTH 3
-#define DOWNSAMPLE_ITERATIONS 3
 #define DOWNSAMPLE_STEPS 5
+#define BLUR_PADDING 10
 
-static const gchar *kawase_blur_glsl_declarations =
+static const gchar *glsl_declarations =
 "uniform vec2 halfpixel;\n"
 "uniform vec2 offset;\n";
 
-static const gchar *kawase_down_glsl_shader =
+static const gchar *glsl_downsample_shader =
 "vec2 uv = cogl_tex_coord.xy;\n"
 "cogl_texel = texture2D(cogl_sampler, uv) * 4.0;\n"
 "cogl_texel += texture2D(cogl_sampler, uv - halfpixel.xy * offset);\n"
@@ -68,7 +66,7 @@ static const gchar *kawase_down_glsl_shader =
 "cogl_texel /= 8.0;\n"
 "cogl_texel.a = 1.0;\n";
 
-static const gchar *kawase_up_glsl_shader =
+static const gchar *glsl_upsample_shader =
 "vec2 uv = cogl_tex_coord.xy;\n"
 "cogl_texel = texture2D(cogl_sampler, uv + vec2(-halfpixel.x * 2.0, 0.0) * offset);\n"
 "cogl_texel += texture2D(cogl_sampler, uv + vec2(-halfpixel.x, halfpixel.y) * offset) * 2.0;\n"
@@ -88,18 +86,21 @@ struct _ClutterKawaseBlurEffect
   /* a back pointer to our actor, so that we can query it */
   ClutterActor *actor;
 
+  gint strength;
+
   gfloat offset;
+  gint iterations;
 
-  gint offset_uniforms[2*DOWNSAMPLE_ITERATIONS];
-  gint halfpixel_uniforms[2*DOWNSAMPLE_ITERATIONS];
+  gint offset_uniforms[2*DOWNSAMPLE_STEPS];
+  gint halfpixel_uniforms[2*DOWNSAMPLE_STEPS];
 
-  CoglHandle offscreen_textures[2*DOWNSAMPLE_ITERATIONS-1];
-  CoglFramebuffer *offscreenbuffers[2*DOWNSAMPLE_ITERATIONS-1];
+  CoglHandle offscreen_textures[2*DOWNSAMPLE_STEPS-1];
+  CoglFramebuffer *offscreenbuffers[2*DOWNSAMPLE_STEPS-1];
 
   gint tex_width;
   gint tex_height;
 
-  CoglPipeline *pipeline_stack[2*DOWNSAMPLE_ITERATIONS];
+  CoglPipeline *pipeline_stack[2*DOWNSAMPLE_STEPS];
 };
 
 struct _ClutterKawaseBlurEffectClass
@@ -117,10 +118,14 @@ G_DEFINE_TYPE (ClutterKawaseBlurEffect,
                clutter_kawase_blur_effect,
                CLUTTER_TYPE_OFFSCREEN_EFFECT);
 
+// G_DEFINE_TYPE_WITH_CODE (ClutterKawaseBlurEffect,
+//                         clutter_kawase_blur_effect,
+//                         CLUTTER_TYPE_OFFSCREEN_EFFECT,
+//                         CLUTTER_REGISTER_INTERVAL_PROGRESS (clutter_actor_box_progress));
+
 static gboolean
 clutter_kawase_blur_effect_pre_paint (ClutterEffect *effect)
 {
-  printf("pre paint\n");
   ClutterKawaseBlurEffect *self = CLUTTER_KAWASE_BLUR_EFFECT (effect);
   ClutterEffectClass *parent_class;
 
@@ -162,7 +167,7 @@ clutter_kawase_blur_effect_pre_paint (ClutterEffect *effect)
       offset[0] = self->offset;
       offset[1] = self->offset;
 
-      for(int i=0; i<2*DOWNSAMPLE_ITERATIONS; i++)
+      for(int i=0; i<2*self->iterations; i++)
         {
           if (self->offset_uniforms[i] > -1 && self->halfpixel_uniforms[i] > -1)
             {
@@ -186,32 +191,33 @@ clutter_kawase_blur_effect_pre_paint (ClutterEffect *effect)
       CoglContext *ctx =
         clutter_backend_get_cogl_context (clutter_get_default_backend ());
 
-      for(int i=0; i<DOWNSAMPLE_ITERATIONS-1; i++)
+      // Create offscreen textures with appropriate resolutions
+      for(int i=0; i<self->iterations-1; i++)
         {
-          gint subdiv = (1<<i+1);
+          gint subdiv = (1<<(i+1));
           if (self->offscreen_textures[i] != NULL)
             {
               cogl_object_unref(self->offscreen_textures[i]);
             }
-          if (self->offscreen_textures[2*DOWNSAMPLE_ITERATIONS-2-i] != NULL)
+          if (self->offscreen_textures[2*self->iterations-2-i] != NULL)
             {
-              cogl_object_unref(self->offscreen_textures[2*DOWNSAMPLE_ITERATIONS-2-i]);
+              cogl_object_unref(self->offscreen_textures[2*self->iterations-2-i]);
             }
           self->offscreen_textures[i] = 
             cogl_texture_2d_new_with_size (ctx, self->tex_width/subdiv, self->tex_width/subdiv);
-          self->offscreen_textures[2*DOWNSAMPLE_ITERATIONS-2-i] = 
+          self->offscreen_textures[2*self->iterations-2-i] = 
             cogl_texture_2d_new_with_size (ctx, self->tex_width/subdiv, self->tex_width/subdiv);
         }
 
-      if (self->offscreen_textures[DOWNSAMPLE_ITERATIONS-1] != NULL)
+      if (self->offscreen_textures[self->iterations-1] != NULL)
         {
-          cogl_object_unref(self->offscreen_textures[DOWNSAMPLE_ITERATIONS-1]);
+          cogl_object_unref(self->offscreen_textures[self->iterations-1]);
         }
-      self->offscreen_textures[DOWNSAMPLE_ITERATIONS-1] = 
-        cogl_texture_2d_new_with_size (ctx, self->tex_width/(1<<DOWNSAMPLE_ITERATIONS), self->tex_width/(1<<DOWNSAMPLE_ITERATIONS));
+      self->offscreen_textures[self->iterations-1] = 
+        cogl_texture_2d_new_with_size (ctx, self->tex_width/(1<<self->iterations), self->tex_width/(1<<self->iterations));
 
 
-      for(int i=1; i<2*DOWNSAMPLE_ITERATIONS; i++)
+      for(int i=1; i<2*self->iterations; i++)
         {
           cogl_pipeline_set_layer_texture (self->pipeline_stack[i], 0, self->offscreen_textures[i-1]);
         }
@@ -227,42 +233,35 @@ clutter_kawase_blur_effect_paint_target (ClutterOffscreenEffect *effect)
   ClutterKawaseBlurEffect *self = CLUTTER_KAWASE_BLUR_EFFECT (effect);
   CoglFramebuffer *framebuffer = cogl_get_draw_framebuffer ();
 
-  // cogl_offscreen_new_to_texture creates a buffer tightly bound to the 
-  // texture it is based on. So any change to the buffer directly changes
-  // the content of the texture. This is handy for chaining the pipelines,
-  // as the input of  
-  for(int i=0; i<2*DOWNSAMPLE_ITERATIONS-1; i++)
+  /*
+   * cogl_offscreen_new_with_texture creates a buffer tightly bound to the 
+   * texture it is based on. So any change to the buffer directly changes
+   * the content of the texture. This is handy for chaining the pipelines,
+   * because cogl_framebuffer_draw_rectangle only wants to output to
+   * framebuffers but the cogl pipelines only work with textures. Using
+   * the aforementioned cogl_offscreen_new_with_texture call ties those two 
+   * objects together.
+   */
+  for(int i=0; i<2*self->iterations-1; i++)
     {
       self->offscreenbuffers[i] = 
-        cogl_offscreen_new_to_texture (self->offscreen_textures[i]);
+        cogl_offscreen_new_with_texture (self->offscreen_textures[i]);
     }
 
-  guint8 paint_opacity;
+  // Set the basic color of the pipelines
+  // guint8 paint_opacity;
+  // paint_opacity = clutter_actor_get_paint_opacity (self->actor);
+  // for(int i=0; i<2*self->iterations; i++)
+  //   {
+  //     cogl_pipeline_set_color4ub (self->pipeline_stack[i],
+  //                                 paint_opacity,
+  //                                 paint_opacity,
+  //                                 paint_opacity,
+  //                                 paint_opacity);
+  //   }
 
-  paint_opacity = clutter_actor_get_paint_opacity (self->actor);
-
-  for(int i=0; i<2*DOWNSAMPLE_ITERATIONS; i++)
-    {
-      cogl_pipeline_set_color4ub (self->pipeline_stack[i],
-                                  paint_opacity,
-                                  paint_opacity,
-                                  paint_opacity,
-                                  paint_opacity);
-    }
-
-  // Downsampling
-  for(int i=0; i<DOWNSAMPLE_ITERATIONS; i++)
-    {
-      cogl_framebuffer_draw_rectangle (self->offscreenbuffers[i],
-                                      self->pipeline_stack[i],
-                                      -1.0, -1.0,
-                                      1.0, 1.0);
-
-      cogl_framebuffer_finish(self->offscreenbuffers[i]);
-    }
-
-  // Upsampling
-  for(int i=DOWNSAMPLE_ITERATIONS; i<2*DOWNSAMPLE_ITERATIONS-1; i++)
+  // Downsampling and Upsampling
+  for(int i=0; i<2*self->iterations-1; i++)
     {
       cogl_framebuffer_draw_rectangle (self->offscreenbuffers[i],
                                       self->pipeline_stack[i],
@@ -272,25 +271,44 @@ clutter_kawase_blur_effect_paint_target (ClutterOffscreenEffect *effect)
       cogl_framebuffer_finish(self->offscreenbuffers[i]);
     }
   
-  // Draw the final image on the onscreen framebuffer (don't ask me 
+  // Draw the final image on the onscreen framebuffer (I don't know
   // why we need to swap the xy coordinates like this to get an upright image...)
   cogl_framebuffer_draw_rectangle (framebuffer,
-                                  self->pipeline_stack[2*DOWNSAMPLE_ITERATIONS-1],
+                                  self->pipeline_stack[2*self->iterations-1],
                                   0, self->tex_height,
                                   self->tex_width, 0);
 
-  for(int i=0; i<2*DOWNSAMPLE_ITERATIONS-1; i++)
+  // Unref the offscreen buffers to free up memory
+  for(int i=0; i<2*self->iterations-1; i++)
     {
       cogl_object_unref(self->offscreenbuffers[i]);
     }
                                    
 }
 
+void
+clutter_kawase_blur_effect_update_blur_strength(ClutterKawaseBlurEffect *self, gint strength) 
+{
+  ClutterKawaseBlurEffectClass *klass = CLUTTER_KAWASE_BLUR_EFFECT_GET_CLASS (self);
+  if(strength < 0)
+  {
+    strength = 0;
+  }
+  if(strength >= BLUR_STEPS)
+  {
+    strength = BLUR_STEPS;
+  }
+  self->iterations = klass->iterations[strength];
+  self->offset = klass->offsets[strength];
+
+  clutter_actor_queue_redraw(self->actor);
+}
+
 static gboolean
 clutter_kawase_blur_effect_get_paint_volume (ClutterEffect      *effect,
                                       ClutterPaintVolume *volume)
 {
-  printf("get paint volume\n");
+  ClutterKawaseBlurEffect *self = CLUTTER_KAWASE_BLUR_EFFECT (effect);
   
   gfloat cur_width, cur_height;
   ClutterVertex origin;
@@ -299,10 +317,10 @@ clutter_kawase_blur_effect_get_paint_volume (ClutterEffect      *effect,
   cur_width = clutter_paint_volume_get_width (volume);
   cur_height = clutter_paint_volume_get_height (volume);
 
-  origin.x -= BLUR_PADDING;
-  origin.y -= BLUR_PADDING;
-  cur_width += 2 * BLUR_PADDING;
-  cur_height += 2 * BLUR_PADDING;
+  origin.x -= self->offset;
+  origin.y -= self->offset;
+  cur_width += 2 * self->offset;
+  cur_height += 2 * self->offset;
   clutter_paint_volume_set_origin (volume, &origin);
   clutter_paint_volume_set_width (volume, cur_width);
   clutter_paint_volume_set_height (volume, cur_height);
@@ -316,7 +334,7 @@ clutter_kawase_blur_effect_dispose (GObject *gobject)
   printf("dispose\n");
   ClutterKawaseBlurEffect *self = CLUTTER_KAWASE_BLUR_EFFECT (gobject);
 
-  for(int i=0; i<2*DOWNSAMPLE_ITERATIONS; i++)
+  for(int i=0; i<2*DOWNSAMPLE_STEPS; i++)
     {
       if (self->pipeline_stack[i] != NULL)
         {
@@ -337,7 +355,6 @@ struct blur_offset {
 static void
 clutter_kawase_blur_effect_class_init (ClutterKawaseBlurEffectClass *klass)
 {
-  //printf("class init\n");
   ClutterEffectClass *effect_class = CLUTTER_EFFECT_CLASS (klass);
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
   ClutterOffscreenEffectClass *offscreen_class;
@@ -350,31 +367,27 @@ clutter_kawase_blur_effect_class_init (ClutterKawaseBlurEffectClass *klass)
   offscreen_class = CLUTTER_OFFSCREEN_EFFECT_CLASS (klass);
   offscreen_class->paint_target = clutter_kawase_blur_effect_paint_target;
 
-  // Here we create an array of blur strength values that are evenly distributed
-	
-  // The range of the slider on the blur settings UI
-  gint remaining_steps = BLUR_STEPS;
-
   /*
-    * Explanation for these numbers:
-    *
-    * The texture blur amount depends on the downsampling iterations and the offset value.
-    * By changing the offset we can alter the blur amount without relying on further downsampling.
-    * But there is a minimum and maximum value of offset per downsample iteration before we
-    * get artifacts.
-    *
-    * The minOffset variable is the minimum offset value for an iteration before we
-    * get blocky artifacts because of the downsampling.
-    *
-    * The maxOffset value is the maximum offset value for an iteration before we
-    * get diagonal line artifacts because of the nature of the dual kawase blur algorithm.
-    *
-    * The expandSize value is the minimum value for an iteration before we reach the end
-    * of a texture in the shader and sample outside of the area that was copied into the
-    * texture from the screen.
-    */
+   * Here we create an array of blur strength values that are evenly distributed
+   * Explanation for these numbers:
+   *
+   * The texture blur amount depends on the downsampling iterations and the offset value.
+   * By changing the offset we can alter the blur amount without relying on further downsampling.
+   * But there is a minimum and maximum value of offset per downsample iteration before we
+   * get artifacts.
+   *
+   * The min_offset variable is the minimum offset value for an iteration before we
+   * get blocky artifacts because of the downsampling.
+   *
+   * The max_offset value is the maximum offset value for an iteration before we
+   * get diagonal line artifacts because of the nature of the dual kawase blur algorithm.
+   *
+   * The expand_size value is the minimum value for an iteration before we reach the end
+   * of a texture in the shader and sample outside of the area that was copied into the
+   * texture from the screen.
+   */
 
-  // TODO: Actually use expand size in the code
+  // TODO: Actually use expand_size in the code
   struct blur_offset blur_offsets[DOWNSAMPLE_STEPS] = {
     {1.0f, 2.0f, 10},   // Down sample size / 2
     {2.0f, 3.0f, 20},   // Down sample size / 4
@@ -383,36 +396,43 @@ clutter_kawase_blur_effect_class_init (ClutterKawaseBlurEffectClass *klass)
     {5.0f, 10.0f, 400}  // Down sample size / 32
   };
 
+  gint remaining_steps = BLUR_STEPS;
   gfloat offset_sum = 0;
   gint index = 0;
 
-  for (gint i = 0; i < DOWNSAMPLE_STEPS; i++) {
+  for (gint i = 0; i < DOWNSAMPLE_STEPS; i++)
+    {
       offset_sum += blur_offsets[i].max_offset - blur_offsets[i].min_offset;
-  }
+    }
 
-  for (gint i = 0; i < DOWNSAMPLE_STEPS; i++) {
+  for (gint i = 0; i < DOWNSAMPLE_STEPS; i++) 
+    {
       gint iteration_number = (gint) ceil((blur_offsets[i].max_offset - blur_offsets[i].min_offset) / offset_sum * BLUR_STEPS);
       remaining_steps -= iteration_number;
 
-      if (remaining_steps < 0) {
+      if (remaining_steps < 0)
+        {
           iteration_number += remaining_steps;
-      }
+        }
 
       gfloat offset_difference = blur_offsets[i].max_offset - blur_offsets[i].min_offset;
 
-      for (gint j = 1; j <= iteration_number; j++) {
+      for (gint j = 1; j <= iteration_number; j++) 
+        {
           klass->offsets[index] = blur_offsets[i].min_offset + (offset_difference / iteration_number) * j;
           klass->iterations[index] = i+1;
           index++;
-      }
-  }
+        }
+    }
 }
 
 static void
 clutter_kawase_blur_effect_init (ClutterKawaseBlurEffect *self)
 {
   ClutterKawaseBlurEffectClass *klass = CLUTTER_KAWASE_BLUR_EFFECT_GET_CLASS (self);
-  self->offset = klass->offsets[13];
+  self->strength = 14;
+  self->offset = klass->offsets[self->strength];
+  self->iterations = klass->iterations[self->strength];
   if (G_UNLIKELY (klass->downsample_base_pipeline == NULL))
     {
       CoglContext *ctx =
@@ -425,15 +445,15 @@ clutter_kawase_blur_effect_init (ClutterKawaseBlurEffect *self)
       CoglSnippet * upsample_snippet;
 
       downsample_snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_TEXTURE_LOOKUP,
-                                            kawase_blur_glsl_declarations,
+                                            glsl_declarations,
                                             NULL);
-      cogl_snippet_set_replace (downsample_snippet, kawase_down_glsl_shader);
+      cogl_snippet_set_replace (downsample_snippet, glsl_downsample_shader);
 
       upsample_snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_TEXTURE_LOOKUP,
-                                            kawase_blur_glsl_declarations,
-                                            NULL);
+                                          glsl_declarations,
+                                          NULL);
 
-      cogl_snippet_set_replace (upsample_snippet, kawase_up_glsl_shader);
+      cogl_snippet_set_replace (upsample_snippet, glsl_upsample_shader);
 
       cogl_pipeline_add_layer_snippet (klass->downsample_base_pipeline, 0, 
                                       downsample_snippet);
@@ -453,14 +473,14 @@ clutter_kawase_blur_effect_init (ClutterKawaseBlurEffect *self)
       cogl_object_unref (upsample_snippet);
     }
 
-  for(gint i=0; i<DOWNSAMPLE_ITERATIONS; i++)
+  for(gint i=0; i<DOWNSAMPLE_STEPS; i++)
     {
       self->pipeline_stack[i] = cogl_pipeline_copy (klass->downsample_base_pipeline);
-      self->pipeline_stack[i+DOWNSAMPLE_ITERATIONS] = cogl_pipeline_copy (klass->upsample_base_pipeline);
+      self->pipeline_stack[i+DOWNSAMPLE_STEPS] = cogl_pipeline_copy (klass->upsample_base_pipeline);
     }
     
   // Get uniform locations
-  for(gint i=0; i<2*DOWNSAMPLE_ITERATIONS; i++)
+  for(gint i=0; i<2*DOWNSAMPLE_STEPS; i++)
     {
       self->offset_uniforms[i] =
         cogl_pipeline_get_uniform_location (self->pipeline_stack[i], "offset");

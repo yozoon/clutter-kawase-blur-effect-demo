@@ -57,6 +57,9 @@ GType clutter_kawase_blur_effect_get_type (void) G_GNUC_CONST;
 CLUTTER_AVAILABLE_IN_1_4
 ClutterEffect *clutter_kawase_blur_effect_new (void);
 
+CLUTTER_AVAILABLE_IN_1_4
+void clutter_kawase_blur_effect_update_blur_strength(ClutterKawaseBlurEffect *self, gint strength);
+
 G_END_DECLS
 
 #endif /* __CLUTTER_KAWASE_BLUR_EFFECT_H__ */

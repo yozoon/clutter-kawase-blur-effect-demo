@@ -1,4 +1,4 @@
-project('cluttertest', 'c')
+project('clutter_kawase_blur_effect', 'c')
 
 gtk_dep = dependency('gtk+-3.0')
 clutter_gtk_dep = dependency('clutter-gtk-1.0')
@@ -12,6 +12,6 @@ configure_file(input : 'baboon.tiff',
   copy : true)
 
 sources = ['main.c', 'clutter-kawase-blur-effect.c']
-executable('clutterapp', sources, 
+executable('blur_demo', sources, 
     dependencies : [gtk_dep, clutter_gtk_dep, clutter_dep, cogl_dep, m_dep]
 )
