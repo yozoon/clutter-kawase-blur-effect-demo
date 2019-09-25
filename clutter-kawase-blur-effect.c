@@ -9,7 +9,7 @@
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -51,8 +51,10 @@
 #include "clutter-kawase-blur-effect.h"
 
 #define BLUR_STEPS 15
+// When changing DOWNSAMPLE_STEPS you also have to update the blur_offsets array
+// in the clutter_kawase_blur_effect_class_init function, so that the array's
+// length matches the number of DOWNSAMPLE_STEPS.
 #define DOWNSAMPLE_STEPS 5
-#define BLUR_PADDING 10
 
 static const gchar *glsl_declarations =
 "uniform vec2 halfpixel;\n"
