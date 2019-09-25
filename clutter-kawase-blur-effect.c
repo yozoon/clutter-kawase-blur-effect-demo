@@ -308,6 +308,8 @@ static gboolean
 clutter_kawase_blur_effect_get_paint_volume (ClutterEffect      *effect,
                                       ClutterPaintVolume *volume)
 {
+  // When is this function actually called? I just replaced BLUR_PADDING
+  // with blur_offset, but I don't know if it actually does anything.
   ClutterKawaseBlurEffect *self = CLUTTER_KAWASE_BLUR_EFFECT (effect);
   
   gfloat cur_width, cur_height;
@@ -331,7 +333,6 @@ clutter_kawase_blur_effect_get_paint_volume (ClutterEffect      *effect,
 static void
 clutter_kawase_blur_effect_dispose (GObject *gobject)
 {
-  printf("dispose\n");
   ClutterKawaseBlurEffect *self = CLUTTER_KAWASE_BLUR_EFFECT (gobject);
 
   for(int i=0; i<2*DOWNSAMPLE_STEPS; i++)
@@ -387,7 +388,8 @@ clutter_kawase_blur_effect_class_init (ClutterKawaseBlurEffectClass *klass)
    * texture from the screen.
    */
 
-  // TODO: Actually use expand_size in the code
+  // TODO: Actually use expand_size in the code. 
+  //       I don't quite understand the function of expand_size yet.
   struct blur_offset blur_offsets[DOWNSAMPLE_STEPS] = {
     {1.0f, 2.0f, 10},   // Down sample size / 2
     {2.0f, 3.0f, 20},   // Down sample size / 4
@@ -407,7 +409,8 @@ clutter_kawase_blur_effect_class_init (ClutterKawaseBlurEffectClass *klass)
 
   for (gint i = 0; i < DOWNSAMPLE_STEPS; i++) 
     {
-      gint iteration_number = (gint) ceil((blur_offsets[i].max_offset - blur_offsets[i].min_offset) / offset_sum * BLUR_STEPS);
+      gint iteration_number = 
+        (gint) ceil((blur_offsets[i].max_offset - blur_offsets[i].min_offset) / offset_sum * BLUR_STEPS);
       remaining_steps -= iteration_number;
 
       if (remaining_steps < 0)
@@ -419,7 +422,8 @@ clutter_kawase_blur_effect_class_init (ClutterKawaseBlurEffectClass *klass)
 
       for (gint j = 1; j <= iteration_number; j++) 
         {
-          klass->offsets[index] = blur_offsets[i].min_offset + (offset_difference / iteration_number) * j;
+          klass->offsets[index] = 
+            blur_offsets[i].min_offset + (offset_difference / iteration_number) * j;
           klass->iterations[index] = i+1;
           index++;
         }
