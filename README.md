@@ -17,16 +17,16 @@ This generates an executable called "blur_demo" inside the _builddir_.
 ## Roadmap
 | Task | Status |
 |:----|:----|
-| Create GTK app that contains a GTK-Clutter embed | Done |
-| Figure out how to compile a standalone clutter effect | Done |
-| Replace box blur shader with a single downsample pass | Done |
-| Figure out how to use the CoglPipeline and CoglSnippet APIs | Done |
-| Use Meson build system | Done |
-| Figure out how to chain CoglPipelines | Done |
-| Implement blur with hardcoded values | Done |
-| Implement the blur strength calculation function | Done |
-| Create a function which allows setting the blur strength | Done |
-| Use this function in combination with a GTK Scale to set the desired blur strength | Done |
+| Create GTK app that contains a GTK-Clutter embed | :heavy_check_mark: |
+| Figure out how to compile a standalone clutter effect | :heavy_check_mark: |
+| Replace box blur shader with a single downsample pass | :heavy_check_mark: |
+| Figure out how to use the CoglPipeline and CoglSnippet APIs | :heavy_check_mark: |
+| Use Meson build system | :heavy_check_mark: |
+| Figure out how to chain CoglPipelines | :heavy_check_mark: |
+| Implement blur with hardcoded values | :heavy_check_mark: |
+| Implement the blur strength calculation function | :heavy_check_mark: |
+| Create a function which allows setting the blur strength | :heavy_check_mark: |
+| Use this function in combination with a GTK Scale to set the desired blur strength | :heavy_check_mark: |
 | Find a way to properly benchmark the performance of the effect | Planned |
 | Make the effect animatable by using the Clutter animation framework | Planned |
 | Tweak the offset and iteration values to make the transitions smoother | Optional |
