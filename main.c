@@ -32,13 +32,40 @@
 #include <clutter-gtk/clutter-gtk.h>
 #include "clutter-kawase-blur-effect.h"
 
+gboolean RUNNING = TRUE;
 /* https://developer.gnome.org/gnome-devel-demos/stable/scale.c.html.en */
 static void
 scale_moved (GtkRange *range,
-            gpointer  user_data)
+             gpointer  user_data)
 {
    gint pos = (gint) gtk_range_get_value (range);
    clutter_kawase_blur_effect_update_blur_strength(CLUTTER_KAWASE_BLUR_EFFECT(user_data), pos);
+}
+
+static void
+button_pressed (GtkWidget *widget,
+            gpointer  user_data)
+{
+   g_print("Embed area clicked.\n");
+}
+
+static gboolean
+on_fps_idle (gpointer widget)
+{
+  gtk_widget_queue_draw (GTK_WIDGET(widget));
+  return RUNNING;
+}
+
+static gboolean
+print_mean_execution_time()
+{
+    g_print("Average rendering time per frame %f µs\n", get_mean_execution_time());
+    return RUNNING;
+}
+
+static void
+destroy() {
+    RUNNING = FALSE;
 }
 
 static void
@@ -91,12 +118,21 @@ activate (GtkApplication *app,
                       G_CALLBACK (scale_moved), 
                       effect);
 
+    g_signal_connect (embed, 
+                      "button_press_event", 
+                      G_CALLBACK (button_pressed), 
+                      NULL);
+
     /* box, child, expand, fill, padding */
     gtk_box_pack_start (GTK_BOX(box), scale, FALSE, TRUE, 0);
     gtk_box_pack_start (GTK_BOX(box), embed, TRUE, TRUE, 0);
     gtk_container_add (GTK_CONTAINER (window), box);
 
     gtk_widget_show_all (window);
+
+    g_idle_add ((GSourceFunc) on_fps_idle, g_object_ref(embed));
+    g_timeout_add (1000, (GSourceFunc) print_mean_execution_time, NULL);
+    g_signal_connect (window, "destroy", G_CALLBACK (destroy), NULL);
 }
 
 int
@@ -114,8 +150,9 @@ main (int    argc,
     GtkApplication *app;
     int status;
 
-    app = gtk_application_new ("org.gtk.example", G_APPLICATION_FLAGS_NONE);
+    app = gtk_application_new ("org.gtk.dual_kawase_blur_demo", G_APPLICATION_FLAGS_NONE);
     g_signal_connect (app, "activate", G_CALLBACK (activate), NULL);
+
     status = g_application_run (G_APPLICATION (app), argc, argv);
     g_object_unref (app);
 

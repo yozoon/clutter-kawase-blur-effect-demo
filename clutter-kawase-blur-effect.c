@@ -4,7 +4,6 @@
  * An OpenGL based 'interactive canvas' library.
  *
  * Copyright (C) 2010  Intel Corporation.
- * Copyright (C) 2019  Julius Piso
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -83,12 +82,18 @@ static const gchar *glsl_upsample_shader =
 "cogl_texel /= 12.0;\n"
 "cogl_texel.a = 1.0;\n";
 
+gdouble total;
+gint count;
+gdouble mean;
+
 struct _ClutterKawaseBlurEffect
 {
   ClutterOffscreenEffect parent_instance;
 
   /* a back pointer to our actor, so that we can query it */
   ClutterActor *actor;
+
+  GTimer *timer;
 
   gint strength;
 
@@ -157,6 +162,7 @@ clutter_kawase_blur_effect_pre_paint (ClutterEffect *effect)
       texture = clutter_offscreen_effect_get_texture (offscreen_effect);
       self->tex_width = cogl_texture_get_width (texture);
       self->tex_height = cogl_texture_get_height (texture);
+      g_print("w: %d\th: %d\n",self->tex_width, self->tex_height);
 
       gfloat halfpixel[2];
       halfpixel[0] = 0.5f / self->tex_width;
@@ -193,7 +199,7 @@ clutter_kawase_blur_effect_pre_paint (ClutterEffect *effect)
       // Create offscreen textures with appropriate resolutions
       for(int i=0; i<self->iterations-1; i++)
         {
-          gint subdiv = (1<<(i+1));
+          gint division_ratio = (1<<(i+1));
           if (self->offscreen_textures[i] != NULL)
             {
               cogl_object_unref(self->offscreen_textures[i]);
@@ -203,9 +209,9 @@ clutter_kawase_blur_effect_pre_paint (ClutterEffect *effect)
               cogl_object_unref(self->offscreen_textures[2*self->iterations-2-i]);
             }
           self->offscreen_textures[i] = 
-            cogl_texture_2d_new_with_size (ctx, self->tex_width/subdiv, self->tex_width/subdiv);
+            cogl_texture_2d_new_with_size (ctx, self->tex_width/division_ratio, self->tex_width/division_ratio);
           self->offscreen_textures[2*self->iterations-2-i] = 
-            cogl_texture_2d_new_with_size (ctx, self->tex_width/subdiv, self->tex_width/subdiv);
+            cogl_texture_2d_new_with_size (ctx, self->tex_width/division_ratio, self->tex_width/division_ratio);
         }
 
       if (self->offscreen_textures[self->iterations-1] != NULL)
@@ -231,6 +237,8 @@ clutter_kawase_blur_effect_paint_target (ClutterOffscreenEffect *effect)
 {
   ClutterKawaseBlurEffect *self = CLUTTER_KAWASE_BLUR_EFFECT (effect);
   CoglFramebuffer *framebuffer = cogl_get_draw_framebuffer ();
+
+  g_timer_reset(self->timer);
 
   /*
    * cogl_offscreen_new_with_texture creates a buffer tightly bound to the 
@@ -282,7 +290,15 @@ clutter_kawase_blur_effect_paint_target (ClutterOffscreenEffect *effect)
     {
       cogl_object_unref(self->offscreenbuffers[i]);
     }
-                                   
+
+  total += g_timer_elapsed (self->timer, NULL);
+  total /= 2;
+  mean = total;
+}
+
+gdouble
+get_mean_execution_time() {
+  return mean*1e6; // return microseconds
 }
 
 void
@@ -300,7 +316,10 @@ clutter_kawase_blur_effect_update_blur_strength(ClutterKawaseBlurEffect *self, g
   self->iterations = klass->iterations[strength];
   self->offset = klass->offsets[strength];
 
-  clutter_actor_queue_redraw(self->actor);
+  if (CLUTTER_IS_ACTOR(self->actor))
+  {
+    clutter_actor_queue_redraw(CLUTTER_ACTOR(self->actor));
+  }
 }
 
 static gboolean
@@ -490,6 +509,8 @@ clutter_kawase_blur_effect_init (ClutterKawaseBlurEffect *self)
       self->halfpixel_uniforms[i] =
         cogl_pipeline_get_uniform_location (self->pipeline_stack[i], "halfpixel");
     }
+
+  self->timer = g_timer_new ();
 }
 
 /**
